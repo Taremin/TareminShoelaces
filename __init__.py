@@ -81,6 +81,7 @@ class ShoeLacing:
                                         center_handle_length_ratio)
 
             points.insert(0, {
+                "type": "MIDDLE",
                 "co": self.immutable(co),
                 "handle_left": self.immutable(handle_left),
                 "handle_right": self.immutable(handle_right),
@@ -104,6 +105,7 @@ class ShoeLacing:
                 handle_left, handle_right = handle_right, handle_left
 
             target.append({
+                "type": "SIDE",
                 "co": self.immutable(co),
                 "handle_left": self.immutable(handle_left),
                 "handle_right": self.immutable(handle_right),
@@ -270,11 +272,14 @@ class DisplayShoeLacing(ShoeLacing):
                     center = v
                     break
 
+            """
+            # 中心点に近い点を無視する
             for line in lines:
                 for idx in reversed(range(len(line))):
                     v = bm.verts[line[idx]]
-                    if v != center and (v.co - center.co).length < 0.5:
+                    if v != center and (v.co - center.co).length < 0.5: # TODO: 0.5 = ignore distance
                         line.pop(idx)
+            """
 
             if is_simple_curve:
                 lines[0] = [lines[0].pop(0), center.index, lines[0].pop()]
@@ -302,6 +307,7 @@ class DisplayShoeLacing(ShoeLacing):
                         handle_left, handle_right = handle_right, handle_left
 
                     target.append({
+                        "type": "MIDDLE",
                         "co": self.immutable(co),
                         "handle_left": self.immutable(handle_left),
                         "handle_right": self.immutable(handle_right),
@@ -398,6 +404,12 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
     use_center_offset: BoolProperty(
         name="上下端の中心に'両端頂点の制御点の長さ'を加える",
         description="上下端の中心に'両端頂点の制御点の長さ'を加えることで、へこむのを防止します",
+        default=True,
+    )
+
+    is_create_hole_curve: BoolProperty(
+        name="穴あけ用のカーブを生成",
+        description="Booleanモディファイアなどで紐を通すための穴を開けるためのカーブを生成します",
         default=True,
     )
 
@@ -616,6 +628,7 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
         settings.center_handle_length_ratio = self.center_handle_length_ratio
         settings.side_handle_length = self.side_handle_length
         settings.use_center_offset = self.use_center_offset
+        settings.is_create_hole_curve = self.is_create_hole_curve
 
         bevel_depth = self.bevel_depth
         is_simple_curve = self.is_simple_curve
@@ -659,6 +672,25 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
         bpy.context.view_layer.objects.active = curve
         bpy.ops.curve.select_all(action='DESELECT')
         curve.data.bevel_depth = bevel_depth
+
+        if settings.is_create_hole_curve:
+            bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+            bpy.ops.curve.primitive_bezier_curve_add(enter_editmode=True)
+            hole_curve_obj = bpy.context.active_object
+            hole_curves = hole_curve_obj.data
+            hole_splines = hole_curves.splines
+            hole_splines.clear()
+            for i in range(len(points)):
+                p = points[i]
+                if p['type'] != 'SIDE':
+                    continue
+                s = hole_splines.new(type='POLY')
+                s.points.add(2 - len(s.points))
+                s.points[0].co = self.convert_coordinate(
+                    copy_obj, hole_curve_obj, p['handle_left']).to_4d()
+                s.points[1].co = self.convert_coordinate(
+                    copy_obj, hole_curve_obj, p['handle_right']).to_4d()
+            hole_curves.bevel_depth = bevel_depth
 
         self.restore_status(base_obj, current_mode, [copy_obj])
 
