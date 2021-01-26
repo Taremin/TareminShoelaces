@@ -354,8 +354,6 @@ class DisplayShoeLacing(ShoeLacing):
         return left + center + right
 
     def create_curve_points(self):
-        vertices2d = self.vertices2d
-
         bpy.context.view_layer.objects.active = self.base_obj
 
         bottom = self.get_bottom_points()
@@ -467,7 +465,6 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
 
     @classmethod
     def edges_to_sorted_vertices(cls, bm, from_idx, to_idx, edges):
-        start = None
         visited = {}
 
         next = from_idx
@@ -642,10 +639,6 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
         settings.is_create_hole_curve = self.is_create_hole_curve
 
         bevel_depth = self.bevel_depth
-        is_simple_curve = self.is_simple_curve
-        center_length = bevel_depth
-        center_handle_length_ratio = self.center_handle_length_ratio
-        side_handle_length = self.side_handle_length
 
         err, result = type(self).check_mesh_geometry(base_obj)
         if err is not None:
@@ -730,8 +723,7 @@ class VIEW3D_PT_TareminShoeLacesPanel(bpy.types.Panel):
 
         col = layout.column(align=True)
         operator_row = col.row(align=True)
-        op = operator_row.operator(
-            OBJECT_OT_TareminShoeLacesCreateCurve.bl_idname)
+        operator_row.operator(OBJECT_OT_TareminShoeLacesCreateCurve.bl_idname)
 
 
 classesToRegister = [
