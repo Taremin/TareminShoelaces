@@ -525,7 +525,18 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
         corner_to_corner_with_route = {}
         for from_index, to_index, edges in corner_to_corner_edges:
             if from_index in corner_to_corner_with_route:
-                corner_to_corner_with_route[to_index] = (from_index, edges)
+                # from, to 双方使用済みだった場合はすでに辞書に登録済みの方がおかしいので修正
+                if to_index in corner_to_corner_with_route:
+                    for index1, index2 in ((from_index, to_index), (to_index, from_index)):
+                        tmp_index, tmp_edges = corner_to_corner_with_route[index1]
+                        if tmp_index not in corner_to_corner_with_route:
+                            corner_to_corner_with_route[tmp_index] = (
+                                index1, tmp_edges)
+                            corner_to_corner_with_route[index1] = (
+                                index2, edges)
+                            break
+                else:
+                    corner_to_corner_with_route[to_index] = (from_index, edges)
             else:
                 corner_to_corner_with_route[from_index] = (to_index, edges)
 
