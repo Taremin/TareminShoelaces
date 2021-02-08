@@ -33,7 +33,9 @@ class ShoeLacing:
     def immutable(self, vec):
         return vec.copy().freeze()
 
-    def calc_center_points(self, verts, vertices2d, y, is_reversed):
+    def calc_center_points(self, y, is_reversed):
+        verts = self.base_obj.data.vertices
+        vertices2d = self.vertices2d
         width, height = vertices2d.shape
         points = []
 
@@ -90,7 +92,9 @@ class ShoeLacing:
         return points
 
     # is_reversed: 基本的には前から後ろに制御点がいくが、一番上だけは紐を前に出すために後ろから前になる
-    def calc_side_points(self, verts, vertices2d, left, right, left_x, right_x, y, is_reversed):
+    def calc_side_points(self, left, right, left_x, right_x, y, is_reversed):
+        verts = self.base_obj.data.vertices
+        vertices2d = self.vertices2d
         side_handle_length = self.settings.side_handle_length
 
         for target, x, sign in [(left, left_x, 1.0), (right, right_x, -1.0)]:
@@ -123,7 +127,8 @@ class ShoeLacing:
             ) * length
         )
 
-    def calc_center_co_by_length(self, verts):
+    def calc_center_co_by_length(self):
+        verts = self.base_obj.data.vertices
         total_length = 0.0
 
         for i in range(len(verts) - 1):
@@ -190,8 +195,7 @@ class DisplayShoeLacing(ShoeLacing):
     #               \_______\______  BOTTOM
     #
     def get_bottom_points(self):
-        return self.calc_center_points(
-            self.base_obj.data.vertices, self.vertices2d, 0, False)
+        return self.calc_center_points(0, False)
 
     # Middle
     # ナナメに分割する両方のedgeで共通してる頂点が中心点
@@ -233,8 +237,7 @@ class DisplayShoeLacing(ShoeLacing):
             x = (y % 2) * -1 % width
 
             # Side
-            self.calc_side_points(verts, vertices2d, left,
-                                  right, x_prev, x, y - 1, False)
+            self.calc_side_points(left, right, x_prev, x, y - 1, False)
 
             # Center
             lines = []
@@ -345,11 +348,11 @@ class DisplayShoeLacing(ShoeLacing):
         # Side
         left = []
         right = []
-        self.calc_side_points(verts, vertices2d, left, right, x1, x2, y, True)
+        self.calc_side_points(left, right, x1, x2, y, True)
 
         # Center
         is_reversed = height % 2 != 0
-        center = self.calc_center_points(verts, vertices2d, y, is_reversed)
+        center = self.calc_center_points(y, is_reversed)
 
         return left + center + right
 
