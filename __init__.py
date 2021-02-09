@@ -1,7 +1,7 @@
 import bpy
 import numpy
 import bmesh
-from bpy.props import IntProperty, FloatProperty, BoolProperty
+from bpy.props import EnumProperty, IntProperty, FloatProperty, BoolProperty
 
 bl_info = {
     'name': 'Taremin Shoelaces',
@@ -22,6 +22,8 @@ class ShoeLacingSettings:
 
 
 class ShoeLacing:
+    label = "ShoeLacing(Base)"
+
     def __init__(self, obj, vertices2d, settings: ShoeLacingSettings):
         self.base_obj = obj
         self.vertices2d = vertices2d
@@ -127,8 +129,99 @@ class ShoeLacing:
             ) * length
         )
 
-    def calc_center_co_by_length(self):
-        verts = self.base_obj.data.vertices
+    def calc_cross_points(self, left, right, from_x, from_y, to_x, to_y):
+        vertices2d = self.vertices2d
+        data = self.base_obj.data
+        verts = data.vertices
+
+        settings = self.settings
+        is_simple_curve = settings.is_simple_curve
+        center_length = settings.bevel_depth
+        center_handle_length_ratio = settings.center_handle_length_ratio
+
+        bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+        bpy.ops.mesh.select_all(action='DESELECT')
+        bm = bmesh.from_edit_mesh(data)
+
+        # Center
+        lines = []
+        for to_x, from_x in [(to_x, from_x), (from_x, to_x)]:
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bm.verts.ensure_lookup_table()
+            v1 = bm.verts[vertices2d[from_x][from_y]]
+            v2 = bm.verts[vertices2d[to_x][to_y]]
+            v1.select = v2.select = True
+            bpy.ops.mesh.vert_connect_path()
+
+            tmp = self.get_selected_verts(v1, v2, None, [])
+            lines.append(tmp)
+
+        line_verts = lines[1]
+        center = None
+        bm.verts.ensure_lookup_table()
+
+        # 対角線を辺で結び中心点を見つける
+        for i in range(1, len(line_verts) - 1):
+            tmp = []
+            other_count = 0
+            v = bm.verts[line_verts[i]]
+            for edge in v.link_edges:
+                ov = edge.other_vert(v)
+                if ov.index in lines[0]:
+                    tmp.append(ov)
+                elif ov.index not in lines[1]:
+                    other_count += 1
+            if len(tmp) == 2 and (len(v.link_edges) == 6 or other_count == 0):
+                i1 = lines[0].index(tmp[0].index)
+                i2 = lines[0].index(tmp[1].index)
+                if i1 > i2:
+                    i1, i2 = i2, i1
+                lines[0].insert(i2, v.index)
+                center = v
+                break
+
+        """
+            # 中心点に近い点を無視する
+            for line in lines:
+                for idx in reversed(range(len(line))):
+                    v = bm.verts[line[idx]]
+                    if v != center and (v.co - center.co).length < 0.5: # TODO: 0.5 = ignore distance
+                        line.pop(idx)
+            """
+
+        if is_simple_curve:
+            lines[0] = [lines[0].pop(0), center.index, lines[0].pop()]
+            lines[1] = [lines[1].pop(0), center.index, lines[1].pop()]
+
+        # 対角線をカーブで結ぶ
+        # 紐同士が交差するため、衝突しないように位置調整
+        front_or_back = 1 if to_y % 2 == 0 else -1
+        for target, line, sign in [(left, lines[0], 1), (right, lines[1], -1)]:
+            for idx in range(1, len(line) - 1):
+                v_current = bm.verts[line[idx]]
+                v_prev = bm.verts[line[idx-1]]
+                v_next = bm.verts[line[idx+1]]
+
+                co = v_current.co + \
+                    (v_current.normal * center_length * sign * front_or_back)
+                handle_left = co + \
+                    self.calc_center_handle(
+                        v_current, v_prev, v_next, center_handle_length_ratio)
+                handle_right = co + \
+                    self.calc_center_handle(
+                        v_current, v_next, v_prev, center_handle_length_ratio)
+
+                if sign < 0:
+                    handle_left, handle_right = handle_right, handle_left
+
+                target.append({
+                    "type": "MIDDLE",
+                    "co": self.immutable(co),
+                    "handle_left": self.immutable(handle_left),
+                    "handle_right": self.immutable(handle_right),
+                })
+
+    def calc_center_co_by_length(self, verts):
         total_length = 0.0
 
         for i in range(len(verts) - 1):
@@ -176,6 +269,8 @@ class ShoeLacing:
 
 
 class DisplayShoeLacing(ShoeLacing):
+    label = "DisplayShoeLacing"
+
     # Bottom
     #
     #     +-------+-------+-------+
@@ -210,111 +305,25 @@ class DisplayShoeLacing(ShoeLacing):
     #     +-------+-------+-------+
     #     |       O       O       |
     #     |       |\  O   |\      |
-    #     |       O_\__\__O_\_____|______  MIDDLE (CENTER): y = 1
+    #     |       O_\__\__O_\_____|______  MIDDLE (CROSS): y = 1
     #     O-------+-------+-------O
     #      \                       \
     #       \_______________________\____  MIDDLE (SIDE): y = 1
     #
-    def get_side_points(self):
+    def get_middle_points(self):
         vertices2d = self.vertices2d
         width, height = vertices2d.shape
-        data = self.base_obj.data
-        verts = data.vertices
-
-        settings = self.settings
-        is_simple_curve = settings.is_simple_curve
-        center_length = settings.bevel_depth
-        center_handle_length_ratio = settings.center_handle_length_ratio
-
-        bpy.ops.object.mode_set(mode='EDIT', toggle=False)
-        bpy.ops.mesh.select_all(action='DESELECT')
-        bm = bmesh.from_edit_mesh(data)
 
         left = []
         right = []
         for y in range(1, height):
-            x_prev = ((y - 1) % 2) * -1 % width
-            x = (y % 2) * -1 % width
+            from_y = y - 1
+            to_y = y
+            from_x = ((y - 1) % 2) * -1 % width
+            to_x = (y % 2) * -1 % width
 
-            # Side
-            self.calc_side_points(left, right, x_prev, x, y - 1, False)
-
-            # Center
-            lines = []
-            for x, x_prev in [(x, x_prev), (x_prev, x)]:
-                bpy.ops.mesh.select_all(action='DESELECT')
-                bm.verts.ensure_lookup_table()
-                v1 = bm.verts[vertices2d[x_prev][y-1]]
-                v2 = bm.verts[vertices2d[x][y]]
-                v1.select = v2.select = True
-                bpy.ops.mesh.vert_connect_path()
-
-                tmp = self.get_selected_verts(v1, v2, None, [])
-                lines.append(tmp)
-            line_verts = lines[1]
-            center = None
-            bm.verts.ensure_lookup_table()
-
-            # 対角線を辺で結び中心点を見つける
-            for i in range(1, len(line_verts) - 1):
-                tmp = []
-                other_count = 0
-                v = bm.verts[line_verts[i]]
-                for edge in v.link_edges:
-                    ov = edge.other_vert(v)
-                    if ov.index in lines[0]:
-                        tmp.append(ov)
-                    elif ov.index not in lines[1]:
-                        other_count += 1
-                if len(tmp) == 2 and (len(v.link_edges) == 6 or other_count == 0):
-                    i1 = lines[0].index(tmp[0].index)
-                    i2 = lines[0].index(tmp[1].index)
-                    if i1 > i2:
-                        i1, i2 = i2, i1
-                    lines[0].insert(i2, v.index)
-                    center = v
-                    break
-
-            """
-            # 中心点に近い点を無視する
-            for line in lines:
-                for idx in reversed(range(len(line))):
-                    v = bm.verts[line[idx]]
-                    if v != center and (v.co - center.co).length < 0.5: # TODO: 0.5 = ignore distance
-                        line.pop(idx)
-            """
-
-            if is_simple_curve:
-                lines[0] = [lines[0].pop(0), center.index, lines[0].pop()]
-                lines[1] = [lines[1].pop(0), center.index, lines[1].pop()]
-
-            # 対角線をカーブで結ぶ
-            # 紐同士が交差するため、衝突しないように位置調整
-            front_or_back = 1 if y % 2 == 0 else -1
-            for target, line, sign in [(left, lines[0], 1), (right, lines[1], -1)]:
-                for idx in range(1, len(line) - 1):
-                    v_current = bm.verts[line[idx]]
-                    v_prev = bm.verts[line[idx-1]]
-                    v_next = bm.verts[line[idx+1]]
-
-                    co = v_current.co + \
-                        (v_current.normal * center_length * sign * front_or_back)
-                    handle_left = co + \
-                        self.calc_center_handle(
-                            v_current, v_prev, v_next, center_handle_length_ratio)
-                    handle_right = co + \
-                        self.calc_center_handle(
-                            v_current, v_next, v_prev, center_handle_length_ratio)
-
-                    if sign < 0:
-                        handle_left, handle_right = handle_right, handle_left
-
-                    target.append({
-                        "type": "MIDDLE",
-                        "co": self.immutable(co),
-                        "handle_left": self.immutable(handle_left),
-                        "handle_right": self.immutable(handle_right),
-                    })
+            self.calc_side_points(left, right, from_x, to_x, from_y, True)
+            self.calc_cross_points(left, right, from_x, from_y, to_x, to_y)
 
         return (left, right)
 
@@ -360,16 +369,81 @@ class DisplayShoeLacing(ShoeLacing):
         bpy.context.view_layer.objects.active = self.base_obj
 
         bottom = self.get_bottom_points()
-        left, right = self.get_side_points()
+        left, right = self.get_middle_points()
         top = self.get_top_points()
 
         return bottom + left + top + list(reversed(right))
+
+
+class BowTieShoeLacing(ShoeLacing):
+    label = "BowTieShoeLacing"
+
+    def create_curve_points(self):
+        vertices2d = self.vertices2d
+        width, height = vertices2d.shape
+        left = []
+        right = []
+
+        bpy.context.view_layer.objects.active = self.base_obj
+
+        is_odd_height = (height % 2 != 0)
+        bottom = self.calc_center_points(0, is_odd_height)
+        if not is_odd_height:
+            self.calc_side_points(left, right, 0, width - 1, 0, False)
+
+        # ループ設定
+        y = 1
+        x1 = 0
+        x2 = width - 1
+        block_num = int(height / 2) - 1
+        is_reversed = False
+
+        if is_odd_height:
+            y = 0
+            block_num += 1
+            x1, x2 = x2, x1
+            is_reversed = True
+
+        for block_index in range(block_num):
+            self.calc_side_points(left, right, x1, x2, y, True)
+            self.calc_cross_points(left, right, x1, y, x2, y + 1)
+            """
+            center_l = self.calc_center_points(y, not is_reversed)
+            left += center_l
+            center_r = self.calc_center_points(y, not is_reversed)
+            right += center_r
+            """
+
+            self.calc_side_points(left, right, x2, x1, y + 1, False)
+
+            is_reversed = not is_reversed
+            x1, x2 = x2, x1
+            y += 2
+
+        if block_num % 2 == 0:
+            self.calc_side_points(left, right, x2, x1, y, True)
+        else:
+            self.calc_side_points(left, right, x1, x2, y, True)
+
+        top = self.calc_center_points(height - 1, True)
+
+        return bottom + left + top + list(reversed(right))
+
+
+def create_subclasses_list(cls):
+    return {subclass.__name__: subclass for subclass in cls.__subclasses__()}
+
+
+ShoeLacingMethods = create_subclasses_list(ShoeLacing)
 
 
 class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
     bl_idname = 'taremin.shoelaces_create_curve'
     bl_label = 'カーブの生成'
     bl_options = {'REGISTER', 'UNDO'}
+
+    lacingMethod: EnumProperty(name="結び方", items=lambda scene, context: [(
+        class_name, ShoeLacingMethods[class_name].label, "") for i, class_name in enumerate(ShoeLacingMethods)])
 
     offset: IntProperty(
         name="方向オフセット",
@@ -385,13 +459,13 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
         default=0.01,
     )
 
-    side_handle_length = FloatProperty(
+    side_handle_length: FloatProperty(
         name="両端頂点の制御点の長さ",
         description="紐を通す部分の厚さを指定します",
         default=0.1,
     )
 
-    center_handle_length_ratio = FloatProperty(
+    center_handle_length_ratio: FloatProperty(
         name="中心頂点の制御点の比率",
         description="結び目など両端以外の制御点の、前後の頂点との長さの比率を指定します",
         default=0.5,
@@ -656,7 +730,8 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
         bpy.ops.curve.primitive_bezier_circle_add(enter_editmode=True)
         curve = bpy.context.active_object
 
-        curve_generator = DisplayShoeLacing(copy_obj, vertices2d, settings)
+        curve_generator = ShoeLacingMethods[self.lacingMethod](
+            copy_obj, vertices2d, settings)
         points = curve_generator.create_curve_points()
 
         bp = curve.data.splines[0].bezier_points
