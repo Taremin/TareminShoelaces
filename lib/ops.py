@@ -389,22 +389,10 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
 
             if isinstance(p, bpy.types.BezierSplinePoint):
                 b.co = self.convert_coordinate(copy_obj, curve, p.co)
-                #b.handle_left_type = 'FREE'
-                #b.handle_right_type = 'FREE'
-                #b.handle_left_type = p.handle_left_type
-                #b.handle_right_type = p.handle_right_type
-                # b.handle_left = self.convert_coordinate(
-                #    copy_obj, curve, p.handle_left)
-                # b.handle_right = self.convert_coordinate(
-                #    copy_obj, curve, p.handle_right)
                 b.handle_left = p.handle_left
                 b.handle_right = p.handle_right
-                #b.handle_left_type = p.handle_left_type
-                #b.handle_right_type = p.handle_right_type
                 b.handle_left_type = 'AUTO'
                 b.handle_right_type = 'AUTO'
-                #b.handle_left_type = 'ALIGNED'
-                #b.handle_right_type = 'ALIGNED'
             else:
                 b.co = self.convert_coordinate(copy_obj, curve, p['co'])
                 b.handle_left_type = 'FREE'
