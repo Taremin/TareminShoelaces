@@ -33,7 +33,7 @@ bl_info = {
     'author': 'Taremin',
     'location': 'View 3D > UI > Taremin',
     'description': "",
-    'version': (0, 0, 5),
+    'version': (0, 0, 6),
     'blender': (2, 80, 0),
     'wiki_url': '',
     'tracker_url': '',
