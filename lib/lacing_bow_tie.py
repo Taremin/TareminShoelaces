@@ -39,6 +39,9 @@ class BowTieShoeLacing(lacing_base.ShoeLacing):
             x1, x2 = x2, x1
             y += 2
 
-        top_left, top_right = self.get_top_points(context)
+        top_left, top_right, cyclic = self.get_top_points(context)
 
-        return top_right + list(reversed(right)) + list(reversed(bottom)) + left + top_left
+        return (
+            top_right + list(reversed(right)) + list(reversed(bottom)) + left + top_left,
+            cyclic
+        )

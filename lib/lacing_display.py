@@ -65,6 +65,9 @@ class DisplayShoeLacing(lacing_base.ShoeLacing):
 
         bottom = self.get_bottom_points()
         left, right = self.get_middle_points()
-        top_left, top_right = self.get_top_points(context)
+        top_left, top_right, cyclic = self.get_top_points(context)
 
-        return top_right + list(reversed(right)) + list(reversed(bottom)) + left + top_left
+        return (
+            top_right + list(reversed(right)) + list(reversed(bottom)) + left + top_left,
+            cyclic
+        )

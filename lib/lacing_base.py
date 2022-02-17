@@ -353,9 +353,10 @@ class ShoeLacing:
         center = self.calc_center_points(y, is_reversed)
 
         asset = library.knots[int(settings.knot_type)]
-        if asset[1] is None:
-            return (left + center,  right)
+        knots = ops.get_knot_list(context.scene, context)
         is_local_object = (asset[1] == "")
+        if asset[1] is None or (is_local_object and len(knots) == 0):
+            return (left + center, right, True)
 
         if is_local_object:
             obj = bpy.data.objects[settings.knot]
@@ -419,7 +420,7 @@ class ShoeLacing:
         if not is_local_object:
             bpy.data.objects.remove(obj, do_unlink=True)
 
-        return (left + center_left,  center_right + right)
+        return (left + center_left,  center_right + right, False)
 
     def calc_normal(self, v0, v1, v2, v3):
         return (v0 - v2).cross(v1 - v3)

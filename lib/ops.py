@@ -19,6 +19,15 @@ def check_index(self, value):
     return value
 
 
+def get_knot_list(scene, context):
+    settings = utils.get_settings(context)
+    items = [
+        (knot.object.name, knot.object.name, "")
+        for i, knot in enumerate(settings.knots) if knot.object is not None
+    ]
+    return items
+
+
 class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
     bl_idname = 'taremin.shoelaces_create_curve'
     bl_label = 'カーブの生成'
@@ -126,14 +135,6 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
         default=0,
         options={'HIDDEN'}
     )
-
-    def get_knot_list(scene, context):
-        settings = utils.get_settings(context)
-        items = [
-            (knot.object.name, knot.object.name, "")
-            for i, knot in enumerate(settings.knots) if knot.object is not None
-        ]
-        return items
 
     knot: bpy.props.EnumProperty(items=get_knot_list)
 
@@ -374,14 +375,10 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
 
         curve_generator = lacing_list.ShoeLacingMethods[self.lacing_method](
             copy_obj, vertices2d, self)
-        points = curve_generator.create_curve_points(context)
+        points, cyclic = curve_generator.create_curve_points(context)
 
         s = curve.data.splines[0]
-
-        if library.knots[int(self.knot_type)][1] is None:
-            s.use_cyclic_u = True
-        else:
-            s.use_cyclic_u = False
+        s.use_cyclic_u = cyclic
 
         bp = s.bezier_points
         bp.add(len(points) - len(bp))
@@ -462,7 +459,8 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
         box = layout.box()
         box.prop(self, "knot_type")
         knot = library.knots[int(self.knot_type)]
-        if knot[1] == "":
+        knots = get_knot_list(context.scene, context)
+        if knot[1] == "" and len(knots) > 0:
             box.prop(self, "knot")
             box.prop(self, "is_reverse_spline_left")
             box.prop(self, "is_reverse_spline_right")
