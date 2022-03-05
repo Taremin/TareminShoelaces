@@ -8,6 +8,7 @@ from .lib import props
 
 # モジュール読み込み
 module_names = [
+    "utils",
     "library",
     "lacing_base",
     "lacing_bow_tie",

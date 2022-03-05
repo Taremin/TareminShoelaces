@@ -3,7 +3,7 @@ import bmesh
 import mathutils
 import math
 import os
-from . import library, ops
+from . import library, utils
 
 
 def append(context, path, obj_name):
@@ -18,7 +18,7 @@ def append(context, path, obj_name):
 class ShoeLacing:
     label = "ShoeLacing(Base)"
 
-    def __init__(self, obj, vertices2d, settings: ops.ShoeLacingProps):
+    def __init__(self, obj, vertices2d, settings):
         self.base_obj = obj
         self.vertices2d = vertices2d
         self.settings = settings
@@ -353,7 +353,7 @@ class ShoeLacing:
         center = self.calc_center_points(y, is_reversed)
 
         asset = library.knots[int(settings.knot_type)]
-        knots = ops.get_knot_list(context.scene, context)
+        knots = utils.get_knot_list(context.scene, context)
         is_local_object = (asset[1] == "")
         if asset[1] is None or (is_local_object and len(knots) == 0):
             return (left + center, right, True)

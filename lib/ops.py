@@ -19,15 +19,6 @@ def check_index(self, value):
     return value
 
 
-def get_knot_list(scene, context):
-    settings = utils.get_settings(context)
-    items = [
-        (knot.object.name, knot.object.name, "")
-        for i, knot in enumerate(settings.knots) if knot.object is not None
-    ]
-    return items
-
-
 class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
     bl_idname = 'taremin.shoelaces_create_curve'
     bl_label = 'カーブの生成'
@@ -136,7 +127,7 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
         options={'HIDDEN'}
     )
 
-    knot: bpy.props.EnumProperty(items=get_knot_list)
+    knot: bpy.props.EnumProperty(items=utils.get_knot_list)
 
     # --------------------------------------------------------------------------
 
@@ -447,7 +438,7 @@ class OBJECT_OT_TareminShoeLacesCreateCurve(bpy.types.Operator):
         box = layout.box()
         box.prop(self, "knot_type")
         knot = library.knots[int(self.knot_type)]
-        knots = get_knot_list(context.scene, context)
+        knots = utils.get_knot_list(context.scene, context)
         if knot[1] == "" and len(knots) > 0:
             box.prop(self, "knot")
             box.prop(self, "is_reverse_spline_left")
